@@ -1,5 +1,3 @@
-I'll help create a README.md file for this Amazon Discount Notifier project. Here's a comprehensive README:
-
 ```markdown
 # Amazon Discount Notifier
 
