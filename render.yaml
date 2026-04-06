@@ -22,7 +22,7 @@ services:
           name: pricewatch-db
           property: connectionString
       - key: CORS_ORIGINS
-        value: '["https://pricewatch-ui.onrender.com"]'
+        value: '["https://pricewatch-ui.onrender.com","https://pricewatch-api-ovoj.onrender.com"]'
     healthCheckPath: /api/health
 
   # Frontend Static Site
@@ -34,7 +34,7 @@ services:
     staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
-        value: https://pricewatch-api.onrender.com
+        value: https://pricewatch-api-ovoj.onrender.com
     routes:
       - type: rewrite
         source: /*
