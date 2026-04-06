@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+:root {
+  --color-primary: #6366f1;
+  --color-primary-dark: #4f46e5;
+}
+
+body {
+  @apply bg-gray-50 text-gray-900 antialiased;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+.dark body {
+  @apply bg-gray-950 text-gray-100;
+}
