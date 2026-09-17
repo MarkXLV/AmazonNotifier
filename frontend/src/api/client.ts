@@ -1,8 +1,22 @@
 import axios from "axios";
 
+// Deployed backend (Render). Used as the default so a production build talks to
+// the live API even if VITE_API_URL isn't set.
+const DEPLOYED_API_URL = "https://pricewatch-api-ovoj.onrender.com";
+
+// API base URL resolution:
+//   1. VITE_API_URL when provided (render.yaml sets it in production).
+//   2. During local dev (`npm run dev`): "" so requests hit the Vite proxy → localhost:8000.
+//   3. Otherwise (production build): the deployed backend.
+const baseURL =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.DEV ? "" : DEPLOYED_API_URL);
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "",
+  baseURL,
   headers: { "Content-Type": "application/json" },
+  // Generous timeout: the free-tier backend can cold-start (~50s) after idle.
+  timeout: 60000,
 });
 
 export interface Product {
@@ -31,6 +45,12 @@ export interface ScrapedProduct {
   url: string;
   image_url: string | null;
   norm_rating: number | null;
+}
+
+export interface ScrapeResponse {
+  /** "live" = fetched from Amazon, "catalog" = local fallback when Amazon blocks. */
+  source: "live" | "catalog";
+  results: ScrapedProduct[];
 }
 
 export interface PriceHistoryEntry {
@@ -77,8 +97,21 @@ export interface NotificationSettings {
 
 // Products
 export const getProducts = () => api.get<Product[]>("/api/products");
-export const addProduct = (url: string, category?: string, target_price?: number) =>
-  api.post<Product>("/api/products", { url, category, target_price });
+export const getProduct = (id: number) => api.get<Product>(`/api/products/${id}`);
+
+export interface AddProductInput {
+  url: string;
+  category?: string;
+  target_price?: number;
+  // Known data (e.g. from a catalog result) lets the backend skip a live scrape.
+  name?: string;
+  price?: number;
+  image_url?: string | null;
+  rating?: number | null;
+  review_count?: number | null;
+}
+export const addProduct = (input: AddProductInput) =>
+  api.post<Product>("/api/products", input);
 export const updateProduct = (id: number, data: { target_price?: number; category?: string }) =>
   api.patch<Product>(`/api/products/${id}`, data);
 export const removeProduct = (id: number) => api.delete(`/api/products/${id}`);
@@ -86,7 +119,7 @@ export const getStats = () => api.get<DashboardStats>("/api/stats");
 
 // Scraper
 export const scrapeProducts = (query: string, maxResults = 20) =>
-  api.post<ScrapedProduct[]>("/api/scrape", { query, max_results: maxResults });
+  api.post<ScrapeResponse>("/api/scrape", { query, max_results: maxResults });
 
 // Prices
 export const checkAllPrices = () =>

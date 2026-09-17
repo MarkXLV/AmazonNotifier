@@ -28,24 +28,43 @@ async def list_products(
     result = await db.execute(stmt)
     products = result.scalars().all()
 
+    if not products:
+        return []
+
+    # Fetch the two most-recent prices for *all* products in a single query
+    # (window function) instead of one query per product. `price_change` is the
+    # latest price minus the previous one.
+    product_ids = [p.id for p in products]
+    row_number = (
+        func.row_number()
+        .over(
+            partition_by=PriceHistory.product_id,
+            order_by=PriceHistory.checked_at.desc(),
+        )
+        .label("rn")
+    )
+    ranked = (
+        select(PriceHistory.product_id, PriceHistory.price, row_number)
+        .where(PriceHistory.product_id.in_(product_ids))
+        .subquery()
+    )
+    recent_stmt = (
+        select(ranked.c.product_id, ranked.c.price)
+        .where(ranked.c.rn <= 2)
+        .order_by(ranked.c.product_id, ranked.c.rn)
+    )
+    recent_rows = (await db.execute(recent_stmt)).all()
+
+    recent_by_product: dict[int, list[float]] = {}
+    for product_id, price in recent_rows:
+        recent_by_product.setdefault(product_id, []).append(price)
+
     out = []
     for p in products:
-        hist_stmt = (
-            select(PriceHistory.price)
-            .where(PriceHistory.product_id == p.id)
-            .order_by(PriceHistory.checked_at.desc())
-            .limit(2)
-        )
-        hist_result = await db.execute(hist_stmt)
-        recent_prices = hist_result.scalars().all()
-
-        price_change = None
-        if len(recent_prices) >= 2:
-            price_change = recent_prices[0] - recent_prices[1]
-
-        product_dict = ProductOut.model_validate(p).model_dump()
-        product_dict["price_change"] = price_change
-        out.append(ProductOut(**product_dict))
+        prices = recent_by_product.get(p.id, [])
+        item = ProductOut.model_validate(p)
+        item.price_change = prices[0] - prices[1] if len(prices) >= 2 else None
+        out.append(item)
 
     return out
 
@@ -53,38 +72,83 @@ async def list_products(
 @router.post("/products", response_model=ProductOut)
 async def add_product(body: ProductCreate, db: AsyncSession = Depends(get_db)):
     existing_stmt = select(Product).where(Product.url == body.url)
-    existing = await db.execute(existing_stmt)
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="Product already tracked")
+    existing = (await db.execute(existing_stmt)).scalar_one_or_none()
+    if existing:
+        # Already in the catalog — re-track (rather than 409) so search results
+        # for known products can be tracked with one click.
+        existing.is_tracked = True
+        if body.target_price is not None:
+            existing.target_price = body.target_price
+        if body.category is not None:
+            existing.category = body.category
+        await db.commit()
+        await db.refresh(existing)
+        return existing
 
-    page = await fetch_product_page(body.url)
-    if not page or page.get("price") is None:
-        raise HTTPException(
-            status_code=422,
-            detail="Could not extract product data from the URL. Make sure it's a valid Amazon product page.",
-        )
+    # Prefer caller-supplied data (e.g. a catalog search result) to avoid a
+    # live product-page scrape; fall back to scraping only when price is unknown.
+    name = body.name
+    price = body.price
+    image_url = body.image_url
+    rating = body.rating
+    review_count = body.review_count
+
+    if price is None:
+        page = await fetch_product_page(body.url)
+        if not page or page.get("price") is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Could not extract product data from the URL. Make sure it's a valid Amazon product page.",
+            )
+        name = name or page.get("name")
+        price = page["price"]
+        image_url = image_url or page.get("image_url")
+        rating = rating if rating is not None else page.get("rating")
+        review_count = review_count if review_count is not None else page.get("review_count")
 
     product = Product(
-        name=page["name"] or "Unknown Product",
+        name=name or "Unknown Product",
         url=body.url,
-        current_price=page["price"],
-        original_price=page["price"],
+        current_price=price,
+        original_price=price,
         target_price=body.target_price,
-        rating=page.get("rating"),
-        review_count=page.get("review_count"),
-        image_url=page.get("image_url"),
+        rating=rating,
+        review_count=review_count,
+        image_url=image_url,
         category=body.category,
         is_tracked=True,
     )
     db.add(product)
     await db.flush()
 
-    history = PriceHistory(product_id=product.id, price=page["price"])
+    history = PriceHistory(product_id=product.id, price=price)
     db.add(history)
 
     await db.commit()
     await db.refresh(product)
     return product
+
+
+@router.get("/products/{product_id}", response_model=ProductOut)
+async def get_product(product_id: int, db: AsyncSession = Depends(get_db)):
+    stmt = select(Product).where(Product.id == product_id)
+    product = (await db.execute(stmt)).scalar_one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    hist_stmt = (
+        select(PriceHistory.price)
+        .where(PriceHistory.product_id == product_id)
+        .order_by(PriceHistory.checked_at.desc())
+        .limit(2)
+    )
+    recent_prices = (await db.execute(hist_stmt)).scalars().all()
+
+    item = ProductOut.model_validate(product)
+    item.price_change = (
+        recent_prices[0] - recent_prices[1] if len(recent_prices) >= 2 else None
+    )
+    return item
 
 
 @router.patch("/products/{product_id}", response_model=ProductOut)

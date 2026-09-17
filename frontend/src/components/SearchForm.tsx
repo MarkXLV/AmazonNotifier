@@ -15,24 +15,24 @@ export default function SearchForm({ onSearch, loading }: Props) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-3">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row">
       <div className="relative flex-1">
         <Search
-          size={18}
-          className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+          size={19}
+          className="pointer-events-none absolute left-[18px] top-1/2 -translate-y-1/2 text-faint"
         />
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search products on Amazon... (e.g. noise cancellation headphones)"
-          className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-11 pr-4 text-sm shadow-sm transition-colors placeholder:text-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+          placeholder="Search products… e.g. noise cancelling headphones"
+          className="h-14 w-full rounded-2xl border-[1.5px] border-line bg-surface pl-12 pr-4 text-base text-ink shadow-[var(--shadow-card)] outline-none transition-colors placeholder:text-faint focus:border-ink focus:ring-[3px] focus:ring-[var(--ring)]"
         />
       </div>
       <button
         type="submit"
         disabled={loading || !query.trim()}
-        className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:opacity-50"
+        className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-primary px-7 text-base font-semibold text-primary-fg transition-opacity hover:opacity-90 disabled:opacity-50"
       >
         {loading ? (
           <Loader2 size={18} className="animate-spin" />

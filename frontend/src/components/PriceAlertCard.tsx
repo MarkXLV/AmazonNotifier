@@ -1,4 +1,4 @@
-import { TrendingDown, Check, Mail } from "lucide-react";
+import { ArrowDown, Check, Mail } from "lucide-react";
 import type { PriceAlert } from "../api/client";
 
 interface Props {
@@ -17,6 +17,7 @@ function formatPrice(n: number) {
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
@@ -28,47 +29,50 @@ export default function PriceAlertCard({ alert, onMarkRead }: Props) {
 
   return (
     <div
-      className={`flex items-start gap-4 rounded-xl border p-4 transition-colors ${
-        alert.is_read
-          ? "border-gray-100 bg-gray-50"
-          : "border-emerald-200 bg-emerald-50"
+      className={`rounded-2xl border border-l-[3px] bg-surface p-[18px] transition-colors ${
+        alert.is_read ? "border-line border-l-line" : "border-line border-l-savings"
       }`}
     >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-        <TrendingDown size={20} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-gray-900 truncate">
-          {alert.product_name || `Product #${alert.product_id}`}
-        </p>
-        <p className="mt-0.5 text-sm text-gray-600">
-          <span className="line-through">{formatPrice(alert.old_price)}</span>
-          {" → "}
-          <span className="font-semibold text-emerald-600">
-            {formatPrice(alert.new_price)}
-          </span>
-          <span className="ml-2 text-emerald-600 font-medium">
-            Save {formatPrice(savings)}
-          </span>
-        </p>
-        <div className="mt-1 flex items-center gap-2">
-          <p className="text-xs text-gray-400">{timeAgo(alert.created_at)}</p>
+      <div className="mb-2.5 flex items-center justify-between">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-savings-soft px-2.5 py-1 text-xs font-semibold text-savings-ink">
+          <ArrowDown size={12} strokeWidth={2.6} />
+          Price drop
+        </span>
+        <div className="flex items-center gap-2">
           {alert.email_sent && (
-            <span className="flex items-center gap-0.5 text-xs text-indigo-500">
-              <Mail size={10} /> Emailed
+            <span className="flex items-center gap-1 text-xs text-faint">
+              <Mail size={11} /> Emailed
             </span>
+          )}
+          <span className="text-xs text-faint">{timeAgo(alert.created_at)}</span>
+          {!alert.is_read && (
+            <button
+              onClick={() => onMarkRead(alert.id)}
+              className="rounded-md p-1 text-faint transition-colors hover:bg-surface-2 hover:text-savings-ink"
+              title="Mark as read"
+              aria-label="Mark as read"
+            >
+              <Check size={14} />
+            </button>
           )}
         </div>
       </div>
-      {!alert.is_read && (
-        <button
-          onClick={() => onMarkRead(alert.id)}
-          className="shrink-0 rounded-lg border border-gray-200 p-1.5 text-gray-400 transition-colors hover:bg-white hover:text-emerald-600"
-          title="Mark as read"
-        >
-          <Check size={16} />
-        </button>
-      )}
+
+      <p className="mb-2.5 line-clamp-1 text-sm font-medium text-ink">
+        {alert.product_name || `Product #${alert.product_id}`}
+      </p>
+
+      <div className="flex items-baseline gap-2">
+        <span className="tnum text-xs text-faint line-through">
+          {formatPrice(alert.old_price)}
+        </span>
+        <span className="tnum font-display text-lg font-bold text-ink">
+          {formatPrice(alert.new_price)}
+        </span>
+        <span className="tnum ml-auto text-sm font-bold text-savings-ink">
+          −{formatPrice(savings)}
+        </span>
+      </div>
     </div>
   );
 }

@@ -22,6 +22,13 @@ class ProductCreate(BaseModel):
     url: str
     category: str | None = None
     target_price: float | None = None
+    # Optional known data (e.g. from a catalog search result) so the product can
+    # be tracked without a live product-page scrape.
+    name: str | None = None
+    price: float | None = None
+    image_url: str | None = None
+    rating: float | None = None
+    review_count: int | None = None
 
 
 class ProductUpdate(BaseModel):
@@ -53,6 +60,11 @@ class ScrapedProduct(BaseModel):
     review_count: int | None = None
     url: str
     image_url: str | None = None
+
+
+class ScrapeResponse(BaseModel):
+    source: str  # "live" (Amazon) or "catalog" (local fallback)
+    results: list[dict]
 
 
 # --------------- Prices ---------------

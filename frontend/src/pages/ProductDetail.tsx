@@ -5,15 +5,17 @@ import {
   Star,
   ExternalLink,
   RefreshCw,
-  Loader2,
   TrendingDown,
   Target,
   Check,
 } from "lucide-react";
 import PriceChart from "../components/PriceChart";
+import ProductThumb from "../components/ProductThumb";
 import PriceAlertCard from "../components/PriceAlertCard";
+import { Skeleton } from "../components/Skeleton";
+import { useToast } from "../components/Toast";
 import {
-  getProducts,
+  getProduct,
   getPriceHistory,
   getAlerts,
   checkSinglePrice,
@@ -35,6 +37,7 @@ function formatPrice(n: number) {
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
   const productId = Number(id);
+  const { notify } = useToast();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [history, setHistory] = useState<PriceHistoryEntry[]>([]);
@@ -48,15 +51,16 @@ export default function ProductDetail() {
     setLoading(true);
     try {
       const [prodRes, histRes, alertsRes] = await Promise.all([
-        getProducts(),
+        getProduct(productId),
         getPriceHistory(productId),
         getAlerts(),
       ]);
-      const found = prodRes.data.find((p) => p.id === productId) ?? null;
-      setProduct(found);
-      setTargetValue(found?.target_price?.toString() || "");
+      setProduct(prodRes.data);
+      setTargetValue(prodRes.data.target_price?.toString() || "");
       setHistory(histRes.data);
       setAlerts(alertsRes.data.filter((a) => a.product_id === productId));
+    } catch {
+      setProduct(null);
     } finally {
       setLoading(false);
     }
@@ -69,46 +73,62 @@ export default function ProductDetail() {
   const handleCheckPrice = async () => {
     setChecking(true);
     try {
-      await checkSinglePrice(productId);
+      const res = await checkSinglePrice(productId);
+      if (res.data.status === "dropped" || res.data.status === "target_reached") {
+        notify("Price dropped!", "success");
+      }
       await refresh();
+    } catch {
+      notify("Couldn't check the price right now.", "error");
     } finally {
       setChecking(false);
     }
   };
 
   const handleMarkRead = async (alertId: number) => {
-    await markAlertRead(alertId);
     setAlerts((prev) =>
       prev.map((a) => (a.id === alertId ? { ...a, is_read: true } : a))
     );
+    await markAlertRead(alertId);
   };
 
   const handleSaveTarget = async () => {
     const val = parseFloat(targetValue);
     if (!isNaN(val) && val > 0) {
       await updateProduct(productId, { target_price: val });
-      if (product) product.target_price = val;
+      if (product) setProduct({ ...product, target_price: val });
+      notify("Target price saved.", "success");
     }
     setEditingTarget(false);
   };
 
   if (loading) {
     return (
-      <div className="flex h-96 items-center justify-center">
-        <Loader2 size={36} className="animate-spin text-indigo-500" />
+      <div className="space-y-6">
+        <Skeleton className="h-4 w-32" />
+        <div className="flex flex-col gap-6 rounded-3xl border border-line bg-surface p-6 md:flex-row">
+          <Skeleton className="h-64 w-full rounded-2xl md:w-80" />
+          <div className="flex-1 space-y-4">
+            <Skeleton className="h-6 w-3/4" />
+            <Skeleton className="h-10 w-1/2" />
+            <Skeleton className="h-4 w-2/5" />
+            <Skeleton className="h-11 w-48" />
+          </div>
+        </div>
+        <Skeleton className="h-72 w-full rounded-3xl" />
       </div>
     );
   }
 
   if (!product) {
     return (
-      <div className="flex h-96 flex-col items-center justify-center gap-4 text-gray-400">
-        <p>Product not found</p>
+      <div className="flex h-96 flex-col items-center justify-center gap-4 text-muted">
+        <p>Product not found.</p>
         <Link
           to="/"
-          className="text-sm font-medium text-indigo-600 hover:underline"
+          className="text-sm font-semibold text-savings-ink hover:underline"
         >
-          Back to Dashboard
+          Back to dashboard
         </Link>
       </div>
     );
@@ -124,77 +144,74 @@ export default function ProductDetail() {
       : null;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <Link
         to="/"
-        className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition-colors hover:text-indigo-600"
+        className="inline-flex items-center gap-2 text-sm font-medium text-muted transition-colors hover:text-ink"
       >
         <ArrowLeft size={16} />
-        Back to Dashboard
+        Back to dashboard
       </Link>
 
-      {/* Product Header */}
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      {/* Hero */}
+      <div className="overflow-hidden rounded-3xl border border-line bg-surface shadow-[var(--shadow-card)]">
         <div className="flex flex-col md:flex-row">
-          <div className="flex h-72 items-center justify-center bg-gray-50 p-6 md:w-80">
-            {product.image_url ? (
-              <img
-                src={product.image_url}
-                alt={product.name}
-                className="max-h-full max-w-full object-contain"
-              />
-            ) : (
-              <span className="text-6xl text-gray-300">📦</span>
-            )}
+          <div className="flex h-64 items-center justify-center bg-gradient-to-br from-surface-2 to-line p-6 md:h-auto md:w-80">
+            <ProductThumb
+              src={product.image_url}
+              alt={product.name}
+              iconSize={72}
+              imgClassName="max-h-full max-w-full object-contain"
+            />
           </div>
 
           <div className="flex flex-1 flex-col p-6 md:p-8">
-            <h1 className="text-xl font-bold text-gray-900 md:text-2xl">
-              {product.name}
-            </h1>
-
             {product.category && (
-              <span className="mt-2 inline-block w-fit rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-600">
+              <span className="mb-3 inline-block w-fit rounded-full bg-surface-2 px-3 py-1 text-xs font-semibold text-muted">
                 {product.category}
               </span>
             )}
+            <h1 className="text-xl font-semibold leading-snug tracking-tight text-ink md:text-2xl">
+              {product.name}
+            </h1>
 
             {/* Price */}
-            <div className="mt-4 flex items-baseline gap-3">
-              <span className="text-3xl font-bold text-gray-900">
+            <div className="mt-5 flex flex-wrap items-baseline gap-3">
+              <span className="tnum font-display text-4xl font-bold tracking-tight text-ink">
                 {formatPrice(product.current_price)}
               </span>
               {product.original_price &&
                 product.original_price !== product.current_price && (
-                  <span className="text-lg text-gray-400 line-through">
+                  <span className="tnum text-lg text-faint line-through">
                     {formatPrice(product.original_price)}
                   </span>
                 )}
               {discount && (
-                <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-sm font-semibold text-emerald-700">
-                  -{discount}%
+                <span className="tnum rounded-full bg-savings-soft px-2.5 py-1 text-sm font-bold text-savings-ink">
+                  −{discount}%
                 </span>
               )}
             </div>
 
-            {/* Target Price */}
-            <div className="mt-3">
+            {/* Target */}
+            <div className="mt-4">
               {editingTarget ? (
                 <div className="flex items-center gap-2">
-                  <Target size={16} className="text-violet-500" />
-                  <span className="text-sm text-gray-600">Target:</span>
+                  <Target size={16} className="text-savings-ink" />
+                  <span className="text-sm text-muted">Target:</span>
                   <input
                     type="number"
                     value={targetValue}
                     onChange={(e) => setTargetValue(e.target.value)}
-                    className="w-32 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    className="tnum w-32 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink outline-none focus:border-savings focus:ring-[3px] focus:ring-[var(--ring)]"
                     placeholder="₹"
                     autoFocus
                     onKeyDown={(e) => e.key === "Enter" && handleSaveTarget()}
                   />
                   <button
                     onClick={handleSaveTarget}
-                    className="rounded-lg bg-indigo-100 p-1.5 text-indigo-600 hover:bg-indigo-200"
+                    className="rounded-lg bg-savings-soft p-2 text-savings-ink hover:opacity-80"
+                    aria-label="Save target"
                   >
                     <Check size={14} />
                   </button>
@@ -202,11 +219,13 @@ export default function ProductDetail() {
               ) : (
                 <button
                   onClick={() => setEditingTarget(true)}
-                  className="flex items-center gap-1.5 text-sm text-violet-600 hover:text-violet-800"
+                  className={`flex items-center gap-2 text-sm font-medium transition-colors ${
+                    product.target_price ? "text-savings-ink" : "text-muted hover:text-ink"
+                  }`}
                 >
                   <Target size={16} />
                   {product.target_price
-                    ? `Target: ${formatPrice(product.target_price)}`
+                    ? `Target ${formatPrice(product.target_price)}`
                     : "Set a target price to get notified"}
                 </button>
               )}
@@ -214,24 +233,24 @@ export default function ProductDetail() {
 
             {/* Rating */}
             {product.rating && (
-              <div className="mt-3 flex items-center gap-2 text-sm text-gray-600">
-                <div className="flex items-center gap-1">
+              <div className="mt-4 flex items-center gap-2 text-sm text-muted">
+                <div className="flex items-center gap-0.5">
                   {[...Array(5)].map((_, i) => (
                     <Star
                       key={i}
                       size={16}
                       className={
                         i < Math.round(product.rating!)
-                          ? "fill-amber-400 text-amber-400"
-                          : "fill-gray-200 text-gray-200"
+                          ? "fill-star text-star"
+                          : "fill-line text-line"
                       }
                     />
                   ))}
                 </div>
-                <span className="font-medium">{product.rating}</span>
+                <span className="font-semibold text-ink">{product.rating}</span>
                 {product.review_count && (
-                  <span className="text-gray-400">
-                    ({product.review_count.toLocaleString()} reviews)
+                  <span className="text-faint">
+                    ({product.review_count.toLocaleString("en-IN")} reviews)
                   </span>
                 )}
               </div>
@@ -242,19 +261,16 @@ export default function ProductDetail() {
               <button
                 onClick={handleCheckPrice}
                 disabled={checking}
-                className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-primary-fg transition-opacity hover:opacity-90 disabled:opacity-50"
               >
-                <RefreshCw
-                  size={16}
-                  className={checking ? "animate-spin" : ""}
-                />
-                Check Price Now
+                <RefreshCw size={16} className={checking ? "animate-spin" : ""} />
+                Check price now
               </button>
               <a
                 href={product.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 rounded-xl border border-gray-300 px-5 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                className="flex items-center gap-2 rounded-2xl border border-line px-5 py-3 text-sm font-semibold text-ink transition-colors hover:bg-surface-2"
               >
                 <ExternalLink size={16} />
                 View on Amazon
@@ -268,19 +284,15 @@ export default function ProductDetail() {
 
       {alerts.length > 0 && (
         <div>
-          <div className="mb-4 flex items-center gap-2">
-            <TrendingDown size={18} className="text-emerald-500" />
-            <h2 className="text-lg font-semibold text-gray-900">
-              Price Drop History
+          <div className="mb-4 flex items-center gap-2.5">
+            <TrendingDown size={18} className="text-savings-ink" />
+            <h2 className="font-display text-xl font-semibold tracking-tight text-ink">
+              Price drop history
             </h2>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {alerts.map((a) => (
-              <PriceAlertCard
-                key={a.id}
-                alert={a}
-                onMarkRead={handleMarkRead}
-              />
+              <PriceAlertCard key={a.id} alert={a} onMarkRead={handleMarkRead} />
             ))}
           </div>
         </div>

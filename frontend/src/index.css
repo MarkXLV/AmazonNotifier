@@ -1,15 +1,121 @@
 @import "tailwindcss";
 
+/* Class-based dark mode (a `.dark` on <html> flips every token below). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---- Design tokens: "Warm Editorial" ---- */
 :root {
-  --color-primary: #6366f1;
-  --color-primary-dark: #4f46e5;
+  --paper: #faf8f5;
+  --surface: #ffffff;
+  --surface-2: #f4f1ea; /* image wells / raised fills */
+  --ink: #191712;
+  --muted: #77726a;
+  --faint: #8a8172;
+  --line: #eae4d9;
+  --line-2: #f1ede4;
+  --primary: #191712;
+  --primary-fg: #faf8f5;
+  --savings: #0e9f6e;
+  --savings-fg: #ffffff;
+  --savings-soft: #e7f6ef;
+  --savings-ink: #0b7e58;
+  --rise: #e5484d;
+  --rise-soft: #fcecec;
+  --rise-ink: #c0393d;
+  --star: #f59e0b;
+  --amber-soft: #fbf0dc;
+  --amber-ink: #b7791f;
+  --ring: rgba(14, 159, 110, 0.35);
+  --shadow-card: 0 10px 30px -22px rgba(25, 23, 18, 0.3);
+}
+
+.dark {
+  --paper: #14120e;
+  --surface: #1e1b16;
+  --surface-2: #26221b;
+  --ink: #f4f0e8;
+  --muted: #a39c8c;
+  --faint: #8b8475;
+  --line: #2e2a22;
+  --line-2: #2a2620;
+  --primary: #f4f0e8;
+  --primary-fg: #14120e;
+  --savings: #12b886;
+  --savings-fg: #06231a;
+  --savings-soft: rgba(18, 184, 134, 0.13);
+  --savings-ink: #3dd9a4;
+  --rise: #f16a6f;
+  --rise-soft: rgba(241, 106, 111, 0.13);
+  --rise-ink: #f16a6f;
+  --star: #f5b547;
+  --amber-soft: rgba(245, 181, 71, 0.13);
+  --amber-ink: #f5b547;
+  --ring: rgba(18, 184, 134, 0.4);
+  --shadow-card: 0 12px 34px -24px rgba(0, 0, 0, 0.6);
+}
+
+/* Expose tokens as Tailwind utilities that resolve the CSS variables at
+   runtime, so `bg-surface`, `text-ink`, etc. respond to the .dark class. */
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-primary: var(--primary);
+  --color-primary-fg: var(--primary-fg);
+  --color-savings: var(--savings);
+  --color-savings-fg: var(--savings-fg);
+  --color-savings-soft: var(--savings-soft);
+  --color-savings-ink: var(--savings-ink);
+  --color-rise: var(--rise);
+  --color-rise-soft: var(--rise-soft);
+  --color-rise-ink: var(--rise-ink);
+  --color-star: var(--star);
+  --color-amber-soft: var(--amber-soft);
+  --color-amber-ink: var(--amber-ink);
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
 }
 
 body {
-  @apply bg-gray-50 text-gray-900 antialiased;
-  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-.dark body {
-  @apply bg-gray-950 text-gray-100;
+/* Tabular figures for prices/stats. */
+.tnum {
+  font-feature-settings: "tnum" 1;
+}
+
+/* Skeleton shimmer for loading states. */
+@keyframes pw-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 25%,
+    var(--line-2) 37%,
+    var(--surface-2) 63%
+  );
+  background-size: 200% 100%;
+  animation: pw-shimmer 1.5s ease-in-out infinite;
+  border-radius: 10px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
+/* Themed scrollbar. */
+* {
+  scrollbar-color: var(--line) transparent;
 }

@@ -3,11 +3,18 @@ import re
 
 import httpx
 from parsel import Selector
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
+from ..models import Product
 from ..schemas import ScrapedProduct
 
 logger = logging.getLogger(__name__)
+
+# Fail fast: a blocked/slow Amazon request should fall back to the catalog
+# quickly rather than making the user wait out a long timeout.
+REQUEST_TIMEOUT = 8.0
 
 HEADERS = {
     "User-Agent": (
@@ -68,7 +75,9 @@ def _extract_product_url(href: str) -> str:
 
 async def _get_client() -> httpx.AsyncClient:
     """Create a client and warm it with a homepage visit to get session cookies."""
-    client = httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=30)
+    client = httpx.AsyncClient(
+        headers=HEADERS, follow_redirects=True, timeout=REQUEST_TIMEOUT
+    )
     try:
         await client.get(settings.amazon_base_url + "/")
     except Exception:
@@ -134,6 +143,41 @@ async def search_amazon(query: str, max_results: int = 20) -> list[ScrapedProduc
         )
 
     return results
+
+
+async def search_catalog(
+    query: str, db: AsyncSession, max_results: int = 20
+) -> list[ScrapedProduct]:
+    """Search the local product catalog by name/category (case-insensitive).
+
+    Used as a reliable fallback when the live Amazon scrape is blocked or empty.
+    """
+    pattern = f"%{query.strip().lower()}%"
+    stmt = (
+        select(Product)
+        .where(
+            or_(
+                func.lower(Product.name).like(pattern),
+                func.lower(func.coalesce(Product.category, "")).like(pattern),
+            )
+        )
+        .order_by(Product.review_count.desc())
+        .limit(max_results)
+    )
+    result = await db.execute(stmt)
+    products = result.scalars().all()
+
+    return [
+        ScrapedProduct(
+            name=p.name,
+            price=p.current_price,
+            rating=p.rating,
+            review_count=p.review_count,
+            url=p.url,
+            image_url=p.image_url,
+        )
+        for p in products
+    ]
 
 
 async def fetch_product_page(url: str) -> dict | None:

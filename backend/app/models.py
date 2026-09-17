@@ -1,6 +1,6 @@
 import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -12,6 +12,10 @@ def _utcnow() -> datetime.datetime:
 
 class Product(Base):
     __tablename__ = "products"
+    __table_args__ = (
+        # Dashboard lists tracked products ordered by updated_at.
+        Index("ix_products_tracked_updated", "is_tracked", "updated_at"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(500))
@@ -38,6 +42,10 @@ class Product(Base):
 
 class PriceHistory(Base):
     __tablename__ = "price_history"
+    __table_args__ = (
+        # "latest N prices per product" lookups on the dashboard + detail page.
+        Index("ix_price_history_product_checked", "product_id", "checked_at"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"))
@@ -49,6 +57,11 @@ class PriceHistory(Base):
 
 class PriceAlert(Base):
     __tablename__ = "price_alerts"
+    __table_args__ = (
+        # Stats filter/aggregate by created_at; alert lists join back to product.
+        Index("ix_price_alerts_created", "created_at"),
+        Index("ix_price_alerts_product", "product_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"))
