@@ -7,11 +7,13 @@ from .config import settings
 from .database import init_db
 from .routers import notifications, prices, products, scraper
 from .scheduler import start_scheduler, stop_scheduler
+from .seed import seed_if_empty
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    await seed_if_empty()
     start_scheduler()
     yield
     stop_scheduler()
